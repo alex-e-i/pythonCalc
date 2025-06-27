@@ -1,12 +1,19 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-from math import pi
+import streamlit as st
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
+from math import pi
+import pandas as pd
 import datetime
-import csv
 
+# Настройки страницы
+st.set_page_config(page_title="Калькулятор мотивации спортсменов", layout="wide")
+st.title("🧮 Калькулятор мотивации спортсменов к УТЗ")
+
+# Описание
+st.markdown("""
+Это интерактивный калькулятор модели формирования мотивации спортсменов к учебно-тренировочным занятиям 
+на этапе спортивной специализации с применением цифровых технологий.
+""")
 
 # Компоненты модели
 components = [
@@ -30,117 +37,77 @@ weights = {
     "Оценка и коррекция": 0.2
 }
 
+# Боковая панель для ввода данных
+st.sidebar.header("🎛️ Установите значения от 0 до 10")
 
-class MotivationCalculator:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Калькулятор мотивации спортсменов")
+values = {}
+for comp in components:
+    values[comp] = st.sidebar.slider(comp, min_value=0.0, max_value=10.0, value=5.0, step=0.1)
 
-        # Словарь для хранения ползунков
-        self.sliders = {}
+# Рассчитываем уровень мотивации
+motivation_score = sum(weights[comp] * values[comp] for comp in components)
 
-        # Создаем поля ввода
-        for i, comp in enumerate(components):
-            tk.Label(root, text=comp).grid(row=i, column=0, padx=10, pady=5, sticky="w")
-            slider = tk.Scale(root, from_=0, to=10, orient="horizontal", resolution=0.1)
-            slider.set(5)
-            slider.grid(row=i, column=1, padx=10, pady=5)
-            self.sliders[comp] = slider
+# Отображаем результат
+st.subheader("📊 Результат")
+st.metric(label="Уровень мотивации", value=f"{motivation_score:.2f} / 10")
 
-        # Кнопка расчёта
-        self.calc_button = tk.Button(root, text="Рассчитать мотивацию", command=self.calculate)
-        self.calc_button.grid(row=len(components), column=0, columnspan=1, pady=10)
+# Радарная диаграмма
+def plot_radar(data):
+    labels = list(data.keys())
+    stats = list(data.values())
 
-        # Кнопка сохранения
-        self.save_button = tk.Button(root, text="Сохранить данные", command=self.save_data)
-        self.save_button.grid(row=len(components), column=1, columnspan=1, pady=10)
+    angles = [n / float(len(labels)) * 2 * pi for n in range(len(labels))]
+    stats += stats[:1]
+    angles += angles[:1]
 
-        # Место для графика
-        self.canvas = None
-        self.motivation_score = 0
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    ax.fill(angles, stats, color='skyblue', alpha=0.4)
+    ax.plot(angles, stats, color='blue', linewidth=2)
 
-    def calculate(self):
-        # Получаем значения из слайдеров
-        values = {comp: float(self.sliders[comp].get()) for comp in components}
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels)
+    ax.yaxis.set_ticklabels([])
 
-        # Рассчитываем общий уровень мотивации
-        self.motivation_score = sum(weights[comp] * values[comp] for comp in components)
+    plt.title("Мотивационный профиль спортсмена", size=20, pad=30)
+    return fig
 
-        # Отображаем результат
-        result_text = f"Уровень мотивации: {self.motivation_score:.2f} / 10"
-        print(result_text)
-        messagebox.showinfo("Результат", result_text)
+fig = plot_radar(values)
+st.pyplot(fig)
 
-        # Рисуем график
-        self.plot_radar(values)
+# Сохранение данных
+st.sidebar.markdown("---")
+st.sidebar.subheader("💾 Сохранить данные")
 
-    def plot_radar(self, data):
-        labels = list(data.keys())
-        stats = list(data.values())
+if st.sidebar.button("Сохранить в CSV"):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    data_to_save = {
+        "Параметр": components + ["Общий уровень мотивации"],
+        "Значение": list(values.values()) + [motivation_score]
+    }
+    df = pd.DataFrame(data_to_save)
+    csv = df.to_csv(index=False)
+    st.sidebar.download_button(
+        label="📥 Скачать CSV",
+        data=csv,
+        file_name=f"motivation_profile_{timestamp}.csv",
+        mime="text/csv"
+    )
 
-        angles = [n / float(len(labels)) * 2 * pi for n in range(len(labels))]
-        stats += stats[:1]
-        angles += angles[:1]
+# Информация о модели
+with st.expander("ℹ️ Подробнее о модели"):
+    st.markdown("""
+    Модель включает следующие ключевые элементы:
+    
+    - **Цифровые технологии**: дневники, датчики, видео, платформы
+    - **Индивидуальный мотивационный профиль**
+    - **Диагностика**: мотивация, тревожность, отношение к УТП, социометрия и др.
+    - **Навыки саморегуляции**: целеполагание, самоанализ, волевое поведение
+    - **Базовые потребности**: автономия, компетентность, социальная принадлежность
+    - **Внешние агенты**: тренер, родители, групповой климат, стимулы
+    - **Оценка и коррекция**: анализ данных, обратная связь
+    - **Этапы формирования мотивации**: вовлечение → стабилизация → углубление
+    """)
 
-        fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
-        ax.fill(angles, stats, color='skyblue', alpha=0.4)
-        ax.plot(angles, stats, color='blue', linewidth=2)
-
-        ax.set_xticks(angles[:-1])
-        ax.set_xticklabels(labels)
-        ax.yaxis.set_ticklabels([])
-
-        plt.title("Мотивационный профиль спортсмена")
-
-        # Интегрируем в Tkinter
-        if hasattr(self, 'canvas') and self.canvas:
-            self.canvas.get_tk_widget().destroy()
-        self.canvas = FigureCanvasTkAgg(fig, master=self.root)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().grid(row=0, column=2, rowspan=len(components)+1)
-
-    def save_data(self):
-        if self.motivation_score == 0:
-            messagebox.showwarning("Ошибка", "Сначала рассчитайте уровень мотивации.")
-            return
-
-        # Получаем текущие значения
-        values = {comp: float(self.sliders[comp].get()) for comp in components}
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Предлагаем путь для сохранения файла
-        file_path = filedialog.asksaveasfilename(defaultextension=".csv",
-                                                  filetypes=[("CSV файл", "*.csv"), ("Текстовый файл", "*.txt")],
-                                                  title="Сохранить данные спортсмена")
-
-        if not file_path:
-            return  # Пользователь отменил сохранение
-
-        if file_path.endswith('.csv'):
-            # Сохранение в CSV
-            with open(file_path, mode='w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(['Дата и время', 'Параметр', 'Значение'])
-                writer.writerow([timestamp, 'Общий уровень мотивации', f"{self.motivation_score:.2f}/10"])
-                for key, value in values.items():
-                    writer.writerow([timestamp, key, value])
-            messagebox.showinfo("Сохранено", f"Данные успешно сохранены в:\n{file_path}")
-
-        elif file_path.endswith('.txt'):
-            # Сохранение в TXT
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(f"Дата и время: {timestamp}\n")
-                f.write(f"Общий уровень мотивации: {self.motivation_score:.2f}/10\n\n")
-                f.write("Параметры:\n")
-                for key, value in values.items():
-                    f.write(f"- {key}: {value}\n")
-            messagebox.showinfo("Сохранено", f"Данные успешно сохранены в:\n{file_path}")
-
-        else:
-            messagebox.showerror("Ошибка", "Неверный формат файла. Выберите .csv или .txt")
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = MotivationCalculator(root)
-    root.mainloop()
+# Подвал
+st.markdown("---")
+st.markdown("🎓 Модель формирования мотивации спортсменов к УТЗ на этапе спортивной специализации")
